@@ -7,7 +7,8 @@ import lombok.Getter;
 import lombok.Setter;
 import ru.skypro.homework.dto.Role;
 
-import java.nio.file.FileStore;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "users")
@@ -52,6 +53,9 @@ public class User {
     @JsonIgnore
     @Enumerated(EnumType.STRING)
     private Role role;
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Ad> ads = new ArrayList<>();
 
     public User(Long id, String username, String password, String firstName, String lastName, String phone) {
         this.id = id;
