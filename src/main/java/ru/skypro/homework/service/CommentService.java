@@ -1,11 +1,9 @@
 package ru.skypro.homework.service;
 
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import ru.skypro.homework.controller.AdController;
 import ru.skypro.homework.dto.Role;
 import ru.skypro.homework.dto.comment.CommentDTO;
 import ru.skypro.homework.dto.comment.CommentsDTO;
@@ -18,6 +16,11 @@ import ru.skypro.homework.repository.CommentRepository;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Сервис для работы с комментариями к объявлениям.
+ * Обрабатывает бизнес-логику создания, получения, обновления и удаления комментариев
+ */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -27,13 +30,14 @@ public class CommentService {
     private final AdService adService;
     private final UserService userService;
 
-    private static final Logger logger = LoggerFactory.getLogger(AdController.class);
-
     /**
-     * Получение комментариев объявления
+     * Получение всех комментариев для объявления
+     *
+     * @param adId идентификатор объявления
+     * @return DTO с количеством и списком комментариев
      */
     public CommentsDTO getCommentsByAdId(Long adId) {
-        logger.debug("Getting comments for ad id: {}", adId);
+        log.debug("Getting comments for ad id: {}", adId);
         List<Comment> comments = commentRepository.findByAdIdOrderByCreatedAtDesc(adId);
         List<CommentDTO> commentDTOS = comments.stream()
                 .map(this::convertToDto)
@@ -46,15 +50,20 @@ public class CommentService {
     }
 
     /**
-     * Добавление комментария
+     * Добавление нового комментария к объявлению
+     *
+     * @param adId     идентификатор объявления
+     * @param dto      DTO с данными комментария
+     * @param username имя пользователя-автора
+     * @return DTO созданного комментария или null при ошибке
      */
     public CommentDTO addComment(Long adId, CreateOrUpdateCommentDTO dto, String username) {
-        logger.debug("Adding comment to ad {} by user {}", adId, username);
+        log.debug("Adding comment to ad {} by user {}", adId, username);
         Ad ad = adService.getAdEntityById(adId);
         User user = userService.findUser(username);
 
         if (ad == null || user == null) {
-            logger.warn("Failed to add comment: ad {} or user {} not found", adId, username);
+            log.warn("Failed to add comment: ad {} or user {} not found", adId, username);
             return null;
         }
 
@@ -64,72 +73,92 @@ public class CommentService {
         comment.setAd(ad);
 
         Comment savedComment = commentRepository.save(comment);
-        logger.info("Comment {} added successfully to ad {}", savedComment.getId(), adId);
+        log.info("Comment {} added successfully to ad {}", savedComment.getId(), adId);
         return convertToDto(savedComment);
     }
 
     /**
-     * Удаление комментария с проверкой прав
+     * Удаление комментария с проверкой прав доступа
+     *
+     * @param commentId идентификатор комментария
+     * @param username  имя пользователя, выполняющего операцию
+     * @return true если удаление успешно, false если нет прав
+     */
+    public boolean deleteCommentWithPermission(Long commentId, String username) {
+        log.debug("Deleting comment {} by user {}", commentId, username);
+
+        if (!hasDeletePermission(commentId, username)) {
+            log.warn("User {} attempted to delete comment {} without permission", username, commentId);
+            return false;
+        }
+
+        return deleteComment(commentId, username);
+    }
+
+    /**
+     * Обновление комментария с проверкой прав доступа
+     *
+     * @param commentId идентификатор комментария
+     * @param dto       DTO с обновленными данными
+     * @param username  имя пользователя, выполняющего операцию
+     * @return DTO обновленного комментария или null если нет прав
+     */
+    public CommentDTO updateCommentWithPermission(Long commentId, CreateOrUpdateCommentDTO dto, String username) {
+        log.debug("Updating comment {} by user {}", commentId, username);
+
+        if (!hasUpdatePermission(commentId, username)) {
+            log.warn("User {} attempted to update comment {} without permission", username, commentId);
+            return null;
+        }
+
+        return updateComment(commentId, dto, username);
+    }
+
+    /**
+     * Удаление комментария (без проверки прав)
+     *
+     * @param commentId идентификатор комментария
+     * @param username  имя пользователя, выполняющего операцию
+     * @return true если удаление успешно, false если комментарий не найден
      */
     public boolean deleteComment(Long commentId, String username) {
-        logger.debug("Deleting comment {} by user {}", commentId, username);
         Comment comment = commentRepository.findById(commentId).orElse(null);
         if (comment == null) {
-            logger.warn("Comment {} not found for deletion", commentId);
+            log.warn("Comment {} not found for deletion", commentId);
             return false;
         }
 
         commentRepository.deleteById(commentId);
-        logger.info("Comment {} deleted successfully by user {}", commentId, username);
+        log.info("Comment {} deleted successfully by user {}", commentId, username);
         return true;
     }
 
     /**
-     * Обновление комментария с проверкой прав
+     * Обновление комментария (без проверки прав)
+     *
+     * @param commentId идентификатор комментария
+     * @param dto       DTO с обновленными данными
+     * @param username  имя пользователя, выполняющего операцию
+     * @return DTO обновленного комментария или null если комментарий не найден
      */
     public CommentDTO updateComment(Long commentId, CreateOrUpdateCommentDTO dto, String username) {
-        logger.debug("Updating comment {} by user {}", commentId, username);
         Comment comment = commentRepository.findById(commentId).orElse(null);
         if (comment == null) {
-            logger.warn("Comment {} not found for update", commentId);
+            log.warn("Comment {} not found for update", commentId);
             return null;
         }
 
         comment.setText(dto.getText());
         Comment updatedComment = commentRepository.save(comment);
-        logger.info("Comment {} updated successfully by user {}", commentId, username);
+        log.info("Comment {} updated successfully by user {}", commentId, username);
         return convertToDto(updatedComment);
     }
 
     /**
-     * Проверка прав доступа к комментарию
-     * @return true если пользователь является автором комментария или автором объявления
-     */
-    public boolean hasCommentPermission(Long commentId, String username) {
-        Comment comment = commentRepository.findById(commentId).orElse(null);
-        if (comment == null) {
-            return false; // или true, в зависимости от логики
-        }
-
-        User user = userService.findUser(username);
-        if (user == null) {
-            return false;
-        }
-
-        // Админ имеет полный доступ
-        if (user.getRole() == Role.ADMIN) {
-            return true;
-        }
-
-        // Автор комментария или автор объявления могут управлять комментарием
-        boolean isCommentAuthor = comment.getUser().getUsername().equals(username);
-        boolean isAdAuthor = comment.getAd().getUser().getUsername().equals(username);
-
-        return isCommentAuthor || isAdAuthor;
-    }
-
-    /**
-     * Проверка прав доступа для РЕДАКТИРОВАНИЯ комментария
+     * Проверка прав доступа для редактирования комментария
+     *
+     * @param commentId идентификатор комментария
+     * @param username  имя пользователя
      * @return true только если пользователь является автором комментария
      */
     public boolean hasUpdatePermission(Long commentId, String username) {
@@ -138,18 +167,19 @@ public class CommentService {
             return false;
         }
 
-        // Только автор комментария может редактировать свой комментарий
-        // Админ НЕ может редактировать чужие комментарии
         boolean isCommentAuthor = comment.getUser().getUsername().equals(username);
 
-        logger.debug("User {} update permission for comment {}: isCommentAuthor={}",
+        log.debug("User {} update permission for comment {}: isCommentAuthor={}",
                 username, commentId, isCommentAuthor);
 
         return isCommentAuthor;
     }
 
     /**
-     * Проверка прав доступа для УДАЛЕНИЯ комментария
+     * Проверка прав доступа для удаления комментария
+     *
+     * @param commentId идентификатор комментария
+     * @param username  имя пользователя
      * @return true если пользователь является админом, автором комментария или автором объявления
      */
     public boolean hasDeletePermission(Long commentId, String username) {
@@ -163,24 +193,22 @@ public class CommentService {
             return false;
         }
 
-        // Админ может удалять любые комментарии
         if (user.getRole() == Role.ADMIN) {
-            logger.debug("User {} is ADMIN, has delete permission for comment {}", username, commentId);
+            log.debug("User {} is ADMIN, has delete permission for comment {}", username, commentId);
             return true;
         }
 
-        // Автор комментария может удалять свои комментарии
         boolean isCommentAuthor = comment.getUser().getUsername().equals(username);
-        // Автор объявления может удалять комментарии под своим объявлением
+
         boolean isAdAuthor = comment.getAd().getUser().getUsername().equals(username);
 
         boolean hasPermission = isCommentAuthor || isAdAuthor;
 
         if (hasPermission) {
-            logger.debug("User {} has delete permission for comment {}: isCommentAuthor={}, isAdAuthor={}",
+            log.debug("User {} has delete permission for comment {}: isCommentAuthor={}, isAdAuthor={}",
                     username, commentId, isCommentAuthor, isAdAuthor);
         } else {
-            logger.debug("User {} has NO delete permission for comment {}: isCommentAuthor={}, isAdAuthor={}",
+            log.debug("User {} has NO delete permission for comment {}: isCommentAuthor={}, isAdAuthor={}",
                     username, commentId, isCommentAuthor, isAdAuthor);
         }
 
@@ -188,7 +216,7 @@ public class CommentService {
     }
 
     /**
-     * Преобразование сущности в DTO
+     * Преобразование сущности комментария в DTO
      */
     private CommentDTO convertToDto(Comment comment) {
         CommentDTO dto = new CommentDTO();
@@ -198,7 +226,6 @@ public class CommentService {
         dto.setAuthorFirstName(comment.getUser().getFirstName());
         dto.setCreatedAt(comment.getCreatedAt());
 
-        // Формируем URL для аватара автора
         String avatarUrl = "/users/" + comment.getUser().getId() + "/avatar";
         dto.setAuthorImage(avatarUrl);
 

@@ -26,26 +26,17 @@ public class CommentController {
 
     /**
      * Получение всех комментариев для указанного объявления
-     *
-     * @param id идентификатор объявления
-     * @return список комментариев к объявлению
      */
     @GetMapping("/{id}/comments")
     @Operation(summary = "Получение комментариев объявления")
     public ResponseEntity<CommentsDTO> getComments(@PathVariable Long id) {
-
         logger.info("Getting comments for ad with id: {}", id);
-
         CommentsDTO comments = commentService.getCommentsByAdId(id);
         return ResponseEntity.ok(comments);
     }
 
     /**
      * Добавление нового комментария к объявлению
-     * @param id идентификатор объявления
-     * @param dto DTO с текстом комментария
-     * @param authentication данные аутентификации текущего пользователя
-     * @return созданный комментарий или 404 если объявление не найдено
      */
     @PostMapping("/{id}/comments")
     @Operation(summary = "Добавление комментария к объявлению")
@@ -61,10 +52,6 @@ public class CommentController {
 
     /**
      * Удаление комментария
-     * @param adId идентификатор объявления (для валидации)
-     * @param commentId идентификатор комментария
-     * @param authentication данные аутентификации для проверки прав доступа
-     * @return 204 No Content при успешном удалении, 404 если не найдено, 403 если нет прав
      */
     @DeleteMapping("/{adId}/comments/{commentId}")
     @Operation(summary = "Удаление комментария")
@@ -74,23 +61,17 @@ public class CommentController {
             Authentication authentication) {
 
         logger.info("Deleting comment {} by user {}", commentId, authentication.getName());
+        boolean deleted = commentService.deleteCommentWithPermission(commentId, authentication.getName());
 
-        if (!commentService.hasDeletePermission(commentId, authentication.getName())) {
-            logger.warn("User {} attempted to delete comment {} without permission", authentication.getName(), commentId);
+        if (deleted) {
+            return ResponseEntity.noContent().build();
+        } else {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
-
-        boolean deleted = commentService.deleteComment(commentId, authentication.getName());
-        return deleted ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
     }
 
     /**
      * Обновление текста комментария
-     * @param adId идентификатор объявления (для валидации)
-     * @param commentId идентификатор комментария
-     * @param dto DTO с новым текстом комментария
-     * @param authentication данные аутентификации для проверки прав доступа
-     * @return обновленный комментарий или 404 если не найдено, 403 если нет прав
      */
     @PatchMapping("/{adId}/comments/{commentId}")
     @Operation(summary = "Обновление комментария")
@@ -101,13 +82,12 @@ public class CommentController {
             Authentication authentication) {
 
         logger.info("Updating comment {} by user {}", commentId, authentication.getName());
+        CommentDTO updatedComment = commentService.updateCommentWithPermission(commentId, dto, authentication.getName());
 
-        if (!commentService.hasUpdatePermission(commentId, authentication.getName())) {
-            logger.warn("User {} attempted to update comment {} without permission", authentication.getName(), commentId);
+        if (updatedComment != null) {
+            return ResponseEntity.ok(updatedComment);
+        } else {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
-
-        CommentDTO updatedComment = commentService.updateComment(commentId, dto, authentication.getName());
-        return updatedComment != null ? ResponseEntity.ok(updatedComment) : ResponseEntity.notFound().build();
     }
 }

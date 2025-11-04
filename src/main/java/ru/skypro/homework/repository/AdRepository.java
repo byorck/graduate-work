@@ -8,6 +8,4 @@ import java.util.List;
 public interface AdRepository extends JpaRepository<Ad, Long> {
 
     List<Ad> findByUser_Username(String username);
-
-
 }

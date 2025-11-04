@@ -3,7 +3,6 @@ package ru.skypro.homework.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,7 +12,6 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -21,7 +19,6 @@ import org.springframework.web.bind.annotation.RestController;
 import ru.skypro.homework.dto.Login;
 import ru.skypro.homework.dto.Register;
 import ru.skypro.homework.service.AuthService;
-import ru.skypro.homework.service.CustomUserDetailsService;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -33,12 +30,12 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthService authService;
-    private final CustomUserDetailsService customUserDetailsService;
     private final AuthenticationManager authenticationManager;
 
 
     /**
      * Аутентификация пользователя в системе
+     *
      * @param login DTO с данными для входа (логин и пароль)
      * @return 200 OK при успешной аутентификации, 401 Unauthorized при ошибке
      */
@@ -47,7 +44,6 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody Login login, HttpServletRequest request) {
         try {
-            // Аутентифицируем пользователя через Spring Security
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(
                             login.getUsername(),
@@ -55,15 +51,10 @@ public class AuthController {
                     )
             );
 
-            // Устанавливаем аутентификацию в SecurityContext
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
-            // Создаем сессию
             HttpSession session = request.getSession(true);
             session.setAttribute("SPRING_SECURITY_CONTEXT", SecurityContextHolder.getContext());
-
-            // Получаем информацию о пользователе
-            UserDetails userDetails = (UserDetails) authentication.getPrincipal();
 
             Map<String, Object> response = new HashMap<>();
             response.put("status", "success");
@@ -89,6 +80,7 @@ public class AuthController {
 
     /**
      * Регистрация нового пользователя в системе
+     *
      * @param register DTO с данными для регистрации
      * @return 201 Created при успешной регистрации, 400 Bad Request при ошибке
      */
@@ -107,6 +99,7 @@ public class AuthController {
 
     /**
      * Выход пользователя из системы
+     *
      * @return 200 OK при успешном выходе
      */
     @Tag(name = "Авторизация")
