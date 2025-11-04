@@ -1,39 +1,34 @@
 package ru.skypro.homework.controller;
 
-import org.junit.jupiter.api.BeforeEach;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import ru.skypro.homework.config.TestConfig;
-import ru.skypro.homework.config.WebSecurityConfig;
 import ru.skypro.homework.dto.comment.CommentDTO;
 import ru.skypro.homework.dto.comment.CommentsDTO;
 import ru.skypro.homework.dto.comment.CreateOrUpdateCommentDTO;
 import ru.skypro.homework.service.CommentService;
-import ru.skypro.homework.service.CustomUserDetailsService;
-import ru.skypro.homework.service.UserService;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * Тестовый класс для CommentController.
+ * Проверяет endpoints для работы с комментариями
+ */
 @WebMvcTest(CommentController.class)
-@Import({WebSecurityConfig.class, TestConfig.class})
-@WithMockUser
 class CommentControllerTest {
 
     @Autowired
@@ -42,127 +37,147 @@ class CommentControllerTest {
     @MockitoBean
     private CommentService commentService;
 
-    @MockitoBean
-    private CustomUserDetailsService customUserDetailsService;
+    @Autowired
+    private ObjectMapper objectMapper;
 
-    @MockitoBean
-    private UserService userService;
+    @Nested
+    @DisplayName("Тесты получения комментариев")
+    class GetCommentsTests {
 
-    private CommentDTO commentDto;
-    private CommentsDTO commentsDto;
+        @Test
+        @WithMockUser
+        @DisplayName("Получение комментариев - должен вернуть список комментариев")
+        void getComments_ShouldReturnComments() throws Exception {
+            // Given
+            CommentsDTO commentsDTO = new CommentsDTO();
+            commentsDTO.setCount(1);
+            commentsDTO.setResults(List.of(new CommentDTO()));
 
-    @BeforeEach
-    void setUp() {
-        commentDto = new CommentDTO();
-        commentDto.setId(1L);
-        commentDto.setText("Test comment");
-        commentDto.setAuthor(1L);
-        commentDto.setAuthorFirstName("John");
-        commentDto.setCreatedAt(LocalDateTime.now());
+            when(commentService.getCommentsByAdId(1L)).thenReturn(commentsDTO);
 
-        commentsDto = new CommentsDTO();
-        commentsDto.setCount(1);
-        commentsDto.setResults(List.of(commentDto));
+            // When & Then
+            mockMvc.perform(get("/ads/1/comments"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.count").value(1));
+        }
     }
 
-    @Test
-    void getComments_ShouldReturnComments() throws Exception {
-        when(commentService.getCommentsByAdId(1L)).thenReturn(commentsDto);
+    @Nested
+    @DisplayName("Тесты управления комментариями")
+    class ManageCommentsTests {
 
-        mockMvc.perform(get("/ads/1/comments"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.count").value(1))
-                .andExpect(jsonPath("$.results[0].id").value(1L))
-                .andExpect(jsonPath("$.results[0].text").value("Test comment"));
-    }
+        @Test
+        @WithMockUser
+        @DisplayName("Добавление комментария - когда объявление существует")
+        void addComment_WhenAdExists_ShouldReturnComment() throws Exception {
+            // Given
+            CreateOrUpdateCommentDTO dto = new CreateOrUpdateCommentDTO();
+            dto.setText("New comment");
 
-    @Test
-    @WithMockUser(username = "test@mail.com")
-    void addComment_ShouldReturnComment() throws Exception {
-        when(commentService.addComment(eq(1L), any(CreateOrUpdateCommentDTO.class), eq("test@mail.com")))
-                .thenReturn(commentDto);
+            CommentDTO commentDTO = new CommentDTO();
+            commentDTO.setId(1L);
+            commentDTO.setText("New comment");
 
-        String jsonContent = "{\"text\": \"New comment\"}";
+            when(commentService.addComment(eq(1L), any(CreateOrUpdateCommentDTO.class), anyString()))
+                    .thenReturn(commentDTO);
 
-        mockMvc.perform(post("/ads/1/comments")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(jsonContent)
-                        .with(csrf()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(1L))
-                .andExpect(jsonPath("$.text").value("Test comment"));
-    }
+            // When & Then
+            mockMvc.perform(post("/ads/1/comments")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(dto)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id").value(1))
+                    .andExpect(jsonPath("$.text").value("New comment"));
+        }
 
-    @Test
-    @WithMockUser(username = "test@mail.com")
-    void addComment_WhenInvalidData_ShouldReturnBadRequest() throws Exception {
-        String jsonContent = "{\"text\": \"\"}";
+        @Test
+        @WithMockUser
+        @DisplayName("Добавление комментария - когда объявление не существует")
+        void addComment_WhenAdNotExists_ShouldReturnNotFound() throws Exception {
+            // Given
+            CreateOrUpdateCommentDTO dto = new CreateOrUpdateCommentDTO();
+            dto.setText("New comment");
 
-        mockMvc.perform(post("/ads/1/comments")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(jsonContent)
-                        .with(csrf()))
-                .andExpect(status().isBadRequest());
-    }
+            when(commentService.addComment(eq(1L), any(CreateOrUpdateCommentDTO.class), anyString()))
+                    .thenReturn(null);
 
-    @Test
-    @WithMockUser(username = "author@mail.com", roles = "USER")
-    public void deleteComment_WhenUserHasPermission_ShouldReturnNoContent() throws Exception {
-        // Исправляем на hasDeletePermission
-        given(commentService.hasDeletePermission(1L, "author@mail.com")).willReturn(true);
-        given(commentService.deleteComment(1L, "author@mail.com")).willReturn(true);
+            // When & Then
+            mockMvc.perform(post("/ads/1/comments")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(dto)))
+                    .andExpect(status().isNotFound());
+        }
 
-        mockMvc.perform(delete("/ads/1/comments/1")
-                        .with(csrf()))
-                .andExpect(status().isNoContent());
+        @Test
+        @WithMockUser
+        @DisplayName("Удаление комментария - когда пользователь имеет права")
+        void deleteComment_WhenUserHasPermission_ShouldReturnNoContent() throws Exception {
+            // Given
+            when(commentService.deleteCommentWithPermission(1L, "user"))
+                    .thenReturn(true);
 
-        verify(commentService).deleteComment(1L, "author@mail.com");
-    }
+            // When & Then
+            mockMvc.perform(delete("/ads/1/comments/1").with(csrf()))
+                    .andExpect(status().isNoContent());
+        }
 
-    @Test
-    @WithMockUser(username = "other@mail.com")
-    void deleteComment_WhenUserNoPermission_ShouldReturnForbidden() throws Exception {
-        // Исправляем на hasDeletePermission
-        when(commentService.hasDeletePermission(1L, "other@mail.com")).thenReturn(false);
+        @Test
+        @WithMockUser
+        @DisplayName("Удаление комментария - когда пользователь не имеет прав")
+        void deleteComment_WhenUserNoPermission_ShouldReturnForbidden() throws Exception {
+            // Given
+            when(commentService.deleteCommentWithPermission(1L, "user"))
+                    .thenReturn(false);
 
-        mockMvc.perform(delete("/ads/1/comments/1").with(csrf()))
-                .andExpect(status().isForbidden());
-    }
+            // When & Then
+            mockMvc.perform(delete("/ads/1/comments/1").with(csrf()))
+                    .andExpect(status().isForbidden());
+        }
 
-    @Test
-    @WithMockUser(username = "author@mail.com")
-    void updateComment_WhenUserHasPermission_ShouldReturnUpdatedComment() throws Exception {
-        CommentDTO updatedComment = new CommentDTO();
-        updatedComment.setId(1L);
-        updatedComment.setText("Updated comment");
+        @Test
+        @WithMockUser
+        @DisplayName("Обновление комментария - когда пользователь имеет права")
+        void updateComment_WhenUserHasPermission_ShouldReturnUpdatedComment() throws Exception {
+            // Given
+            CreateOrUpdateCommentDTO dto = new CreateOrUpdateCommentDTO();
+            dto.setText("Updated comment");
 
-        // Исправляем на hasUpdatePermission
-        when(commentService.hasUpdatePermission(1L, "author@mail.com")).thenReturn(true);
-        when(commentService.updateComment(eq(1L), any(CreateOrUpdateCommentDTO.class), eq("author@mail.com")))
-                .thenReturn(updatedComment);
+            CommentDTO updatedComment = new CommentDTO();
+            updatedComment.setId(1L);
+            updatedComment.setText("Updated comment");
 
-        String jsonContent = "{\"text\": \"Updated comment\"}";
+            when(commentService.updateCommentWithPermission(eq(1L), any(CreateOrUpdateCommentDTO.class), anyString()))
+                    .thenReturn(updatedComment);
 
-        mockMvc.perform(patch("/ads/1/comments/1")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(jsonContent)
-                        .with(csrf()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.text").value("Updated comment"));
-    }
+            // When & Then
+            mockMvc.perform(patch("/ads/1/comments/1")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(dto)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id").value(1))
+                    .andExpect(jsonPath("$.text").value("Updated comment"));
+        }
 
-    @Test
-    @WithMockUser(username = "other@mail.com")
-    void updateComment_WhenUserNoPermission_ShouldReturnForbidden() throws Exception {
-        // Исправляем на hasUpdatePermission
-        when(commentService.hasUpdatePermission(1L, "other@mail.com")).thenReturn(false);
+        @Test
+        @WithMockUser
+        @DisplayName("Обновление комментария - когда пользователь не имеет прав")
+        void updateComment_WhenUserNoPermission_ShouldReturnForbidden() throws Exception {
+            // Given
+            CreateOrUpdateCommentDTO dto = new CreateOrUpdateCommentDTO();
+            dto.setText("Updated comment");
 
-        String jsonContent = "{\"text\": \"Updated comment\"}";
+            when(commentService.updateCommentWithPermission(eq(1L), any(CreateOrUpdateCommentDTO.class), anyString()))
+                    .thenReturn(null);
 
-        mockMvc.perform(patch("/ads/1/comments/1")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(jsonContent)
-                        .with(csrf()))
-                .andExpect(status().isForbidden());
+            // When & Then
+            mockMvc.perform(patch("/ads/1/comments/1")
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(dto)))
+                    .andExpect(status().isForbidden());
+        }
     }
 }

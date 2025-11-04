@@ -1,6 +1,8 @@
 package ru.skypro.homework.service;
 
 import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -15,17 +17,27 @@ import ru.skypro.homework.repository.AdRepository;
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.io.*;
+import java.io.BufferedInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+/**
+ * Сервис для работы с объявлениями.
+ * Обрабатывает бизнес-логику создания, получения, обновления и удаления объявлений
+ */
+@Slf4j
 @Service
 @Transactional
+@RequiredArgsConstructor
 public class AdService {
     @Value("${path.to.ads.folder}")
     private String adDir;
@@ -33,13 +45,31 @@ public class AdService {
     private final UserService userService;
     private final AdRepository adRepository;
 
-    public AdService(UserService userService, AdRepository adRepository) {
-        this.userService = userService;
-        this.adRepository = adRepository;
-    }
+    /**
+     * Создание нового объявления
+     *
+     * @param username имя пользователя-автора
+     * @param title заголовок объявления
+     * @param price цена товара
+     * @param description описание товара
+     * @param imageFile файл изображения
+     * @return DTO созданного объявления или null при ошибке
+     * @throws IOException при ошибках работы с файловой системой
+     */
+    public AdFullResponseDTO createAd(String username, String title, Integer price, String description, MultipartFile imageFile) throws IOException {
+        log.debug("Creating ad for user: {}", username);
 
-    // Создание объявления с загрузкой картинки
-    public Ad createAd(User user, AdCreateRequestDTO adRequest, MultipartFile imageFile) throws IOException {
+        User user = userService.findUser(username);
+        if (user == null) {
+            log.warn("User {} not found for ad creation", username);
+            return null;
+        }
+
+        AdCreateRequestDTO adRequest = new AdCreateRequestDTO();
+        adRequest.setTitle(title);
+        adRequest.setPrice(price);
+        adRequest.setDescription(description);
+
         Ad ad = new Ad();
         ad.setUser(user);
         ad.setTitle(adRequest.getTitle());
@@ -56,64 +86,153 @@ public class AdService {
         ad.setMediaType(imageFile.getContentType());
         ad.setData(generateAdPreview(filePath));
 
-        return adRepository.save(ad); // Возвращаем сохраненную сущность
+        Ad savedAd = adRepository.save(ad);
+        log.info("Ad {} created successfully by user {}", savedAd.getId(), username);
+        return toAdFullResponse(savedAd);
     }
 
-    // Получение списка коротких описаний объявлений
-    public List<AdShortResponseDTO> findAll() {
-        return adRepository.findAll().stream()
+    /**
+     * Получение всех объявлений
+     *
+     * @return карта с количеством и списком объявлений
+     */
+    public Map<String, Object> getAllAds() {
+        List<AdShortResponseDTO> ads = adRepository.findAll().stream()
                 .map(this::toAdShortResponse)
                 .collect(Collectors.toList());
+
+        return Map.of(
+                "count", ads.size(),
+                "results", ads
+        );
     }
 
-    // Получение компактных объявлений пользователя
-    public List<AdShortResponseDTO> findByUsername(String username) {
-        return adRepository.findByUser_Username(username).stream()
+    /**
+     * Получение объявлений конкретного пользователя
+     *
+     * @param username имя пользователя
+     * @return карта с количеством и списком объявлений пользователя
+     */
+    public Map<String, Object> getUserAds(String username) {
+        List<AdShortResponseDTO> ads = adRepository.findByUser_Username(username).stream()
                 .map(this::toAdShortResponse)
                 .collect(Collectors.toList());
+
+        return Map.of(
+                "count", ads.size(),
+                "results", ads
+        );
     }
 
-    // Получение подробного объявления по id в виде DTO
-    public AdFullResponseDTO findById(Long id) {
+    /**
+     * Получение объявления по идентификатору
+     *
+     * @param id идентификатор объявления
+     * @return DTO объявления или null если не найдено
+     */
+    public AdFullResponseDTO getAdById(Long id) {
         return adRepository.findById(id)
                 .map(this::toAdFullResponse)
                 .orElse(null);
     }
 
-    // Метод для получения сущности для обновления картинки
-    public Ad getAdEntityById(Long id) {
-        return adRepository.findById(id).orElse(null);
-    }
+    /**
+     * Удаление объявления с проверкой прав доступа
+     *
+     * @param id идентификатор объявления
+     * @param username имя пользователя, выполняющего операцию
+     * @return true если удаление успешно, false если нет прав или объявление не найдено
+     */
+    public boolean deleteAd(Long id, String username) {
+        log.debug("Deleting ad {} by user {}", id, username);
 
-    // Удаление объявления по id
-    public boolean deleteById(Long id) {
-        if (adRepository.existsById(id)) {
-            adRepository.deleteById(id);
-            return true;
+        Ad ad = adRepository.findById(id).orElse(null);
+        if (ad == null) {
+            log.warn("Ad {} not found for deletion", id);
+            return false;
         }
-        return false;
+
+        if (!userService.hasPermission(ad, username)) {
+            log.warn("User {} attempted to delete ad {} without permission", username, id);
+            return false;
+        }
+
+        adRepository.deleteById(id);
+        log.info("Ad {} deleted successfully by user {}", id, username);
+        return true;
     }
 
-    // Обновление объявления
-    public boolean updateAd(Long id, AdUpdateRequestDTO updateRequest) {
+    /**
+     * Обновление информации об объявлении с проверкой прав доступа
+     *
+     * @param id идентификатор объявления
+     * @param updateRequest DTO с обновленными данными
+     * @param username имя пользователя, выполняющего операцию
+     * @return true если обновление успешно, false если нет прав или объявление не найдено
+     */
+    public boolean updateAd(Long id, AdUpdateRequestDTO updateRequest, String username) {
+        log.debug("Updating ad {} by user {}", id, username);
+
         Optional<Ad> optAd = adRepository.findById(id);
-        if (optAd.isEmpty()) return false;
+        if (optAd.isEmpty()) {
+            return false;
+        }
+
         Ad ad = optAd.get();
+        if (!userService.hasPermission(ad, username)) {
+            log.warn("User {} attempted to update ad {} without permission", username, id);
+            return false;
+        }
+
         ad.setTitle(updateRequest.getTitle());
         ad.setPrice(updateRequest.getPrice());
         ad.setDescription(updateRequest.getDescription());
         adRepository.save(ad);
+
+        log.info("Ad {} updated successfully by user {}", id, username);
         return true;
     }
 
-    public void updateAdImage(Ad ad, MultipartFile imageFile) throws IOException {
+    /**
+     * Обновление изображения объявления с проверкой прав доступа
+     *
+     * @param id идентификатор объявления
+     * @param imageFile новый файл изображения
+     * @param username имя пользователя, выполняющего операцию
+     * @return true если обновление успешно, false если нет прав или объявление не найдено
+     * @throws IOException при ошибках работы с файловой системой
+     */
+    public boolean updateAdImage(Long id, MultipartFile imageFile, String username) throws IOException {
+        log.debug("Updating ad image for ad {} by user {}", id, username);
+
+        Ad ad = adRepository.findById(id).orElse(null);
+        if (ad == null) {
+            return false;
+        }
+
+        if (!userService.hasPermission(ad, username)) {
+            log.warn("User {} attempted to update ad image {} without permission", username, id);
+            return false;
+        }
+
+        updateAdImageInternal(ad, imageFile);
+        return true;
+    }
+
+    /**
+     * Внутренний метод для обновления изображения объявления
+     *
+     * @param ad сущность объявления
+     * @param imageFile новый файл изображения
+     * @throws IOException при ошибках работы с файловой системой
+     */
+    private void updateAdImageInternal(Ad ad, MultipartFile imageFile) throws IOException {
         String extension = getExtension(Objects.requireNonNull(imageFile.getOriginalFilename()));
         String newFileName = ad.getUser().getUsername() + "_" + System.currentTimeMillis() + "." + extension;
 
         Path baseDir = Path.of(adDir).toAbsolutePath().normalize();
         Path newFilePath = baseDir.resolve(newFileName).normalize();
 
-        // Более строгая проверка безопасности
         if (!newFilePath.startsWith(baseDir)) {
             throw new SecurityException("Invalid file path: attempted path traversal");
         }
@@ -121,13 +240,11 @@ public class AdService {
         Files.createDirectories(newFilePath.getParent());
         Files.copy(imageFile.getInputStream(), newFilePath, StandardCopyOption.REPLACE_EXISTING);
 
-        // Удаляем старый файл если он существует и отличается от нового
         if (ad.getFilePath() != null && !ad.getFilePath().equals(newFilePath.toString())) {
             try {
                 Files.deleteIfExists(Path.of(ad.getFilePath()));
             } catch (IOException e) {
-                // Логируем ошибку, но не прерываем выполнение
-                System.err.println("Failed to delete old ad image: " + ad.getFilePath());
+                log.error("Failed to delete old ad image: {}", ad.getFilePath(), e);
             }
         }
 
@@ -137,9 +254,22 @@ public class AdService {
         ad.setData(generateAdPreview(newFilePath));
 
         adRepository.save(ad);
+        log.info("Ad image updated for ad {}", ad.getId());
     }
 
-    // Преобразование в DTO короткого вида
+    /**
+     * Получение сущности объявления по идентификатору
+     *
+     * @param id идентификатор объявления
+     * @return сущность объявления или null если не найдено
+     */
+    public Ad getAdEntityById(Long id) {
+        return adRepository.findById(id).orElse(null);
+    }
+
+    /**
+     * Преобразование сущности в DTO для краткого представления
+     */
     private AdShortResponseDTO toAdShortResponse(Ad ad) {
         AdShortResponseDTO dto = new AdShortResponseDTO();
         dto.setPk(ad.getId());
@@ -150,7 +280,9 @@ public class AdService {
         return dto;
     }
 
-    // Преобразование в DTO подробного вида
+    /**
+     * Преобразование сущности в DTO для полного представления
+     */
     private AdFullResponseDTO toAdFullResponse(Ad ad) {
         AdFullResponseDTO dto = new AdFullResponseDTO();
         dto.setPk(ad.getId());
@@ -165,10 +297,20 @@ public class AdService {
         return dto;
     }
 
+    /**
+     * Получение расширения файла из имени
+     */
     private String getExtension(String fileName) {
         return fileName.substring(fileName.lastIndexOf('.') + 1);
     }
 
+    /**
+     * Генерация превью изображения для объявления
+     *
+     * @param filePath путь к исходному файлу изображения
+     * @return массив байтов превью изображения
+     * @throws IOException при ошибках чтения/записи изображения
+     */
     private byte[] generateAdPreview(Path filePath) throws IOException {
         try (InputStream inputStream = Files.newInputStream(filePath);
              BufferedInputStream bis = new BufferedInputStream(inputStream, 1024);
@@ -180,11 +322,12 @@ public class AdService {
             }
 
             int width = 100;
-            int height = image.getHeight() * width / image.getWidth(); // сохраняем пропорции
+            int height = image.getHeight() * width / image.getWidth();
             BufferedImage preview = new BufferedImage(width, height, image.getType());
             Graphics2D graphics = preview.createGraphics();
             graphics.drawImage(image, 0, 0, width, height, null);
             graphics.dispose();
+
             String ext = getExtension(filePath.getFileName().toString());
             ImageIO.write(preview, ext, baos);
             return baos.toByteArray();
