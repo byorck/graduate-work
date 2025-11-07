@@ -16,6 +16,9 @@ public class Comment {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "comment_number", nullable = false)
+    private Long commentNumber;
+
     @Column(columnDefinition = "TEXT")
     private String text;
 

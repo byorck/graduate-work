@@ -67,13 +67,16 @@ COMMENT ON COLUMN ads.user_id IS 'ID владельца объявления, в
 -- changeset byorck:4
 CREATE TABLE comments
 (
-    id         BIGSERIAL PRIMARY KEY,
-    text       TEXT   NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    user_id    BIGINT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-    ad_id      BIGINT NOT NULL REFERENCES ads (id) ON DELETE CASCADE
+    id             BIGSERIAL PRIMARY KEY,
+    comment_number BIGINT NOT NULL,
+    text           TEXT   NOT NULL,
+    created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    user_id        BIGINT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    ad_id          BIGINT NOT NULL REFERENCES ads (id) ON DELETE CASCADE,
+    UNIQUE (ad_id, comment_number)
 );
 
 CREATE INDEX idx_comments_ad_id ON comments (ad_id);
 CREATE INDEX idx_comments_user_id ON comments (user_id);
 CREATE INDEX idx_comments_created_at ON comments (created_at DESC);
+CREATE INDEX idx_comments_ad_number ON comments (ad_id, comment_number);
