@@ -8,4 +8,5 @@ import java.util.Optional;
 public interface AvatarRepository extends JpaRepository<Avatar, Long> {
 
     Optional<Avatar> findByUser_Username(String username);
+    Optional<Avatar> findByUser_Id(Long userId);
 }
