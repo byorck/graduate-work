@@ -26,6 +26,7 @@ import static org.mockito.Mockito.*;
  * Проверяет бизнес-логику работы с объявлениями
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("Тестирование сервиса объявлений")
 class AdServiceTest {
 
     @Mock

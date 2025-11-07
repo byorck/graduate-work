@@ -13,6 +13,7 @@ import ru.skypro.homework.dto.ad.AdUpdateRequestDTO;
 import ru.skypro.homework.entity.Ad;
 import ru.skypro.homework.entity.User;
 import ru.skypro.homework.repository.AdRepository;
+import ru.skypro.homework.repository.UserRepository;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
@@ -44,22 +45,23 @@ public class AdService {
 
     private final UserService userService;
     private final AdRepository adRepository;
+    private final UserRepository userRepository;
 
     /**
      * Создание нового объявления
      *
-     * @param username имя пользователя-автора
-     * @param title заголовок объявления
-     * @param price цена товара
+     * @param username    имя пользователя-автора
+     * @param title       заголовок объявления
+     * @param price       цена товара
      * @param description описание товара
-     * @param imageFile файл изображения
+     * @param imageFile   файл изображения
      * @return DTO созданного объявления или null при ошибке
      * @throws IOException при ошибках работы с файловой системой
      */
     public AdFullResponseDTO createAd(String username, String title, Integer price, String description, MultipartFile imageFile) throws IOException {
         log.debug("Creating ad for user: {}", username);
 
-        User user = userService.findUser(username);
+        User user = userRepository.findByUsername(username).orElse(null);
         if (user == null) {
             log.warn("User {} not found for ad creation", username);
             return null;
@@ -76,7 +78,7 @@ public class AdService {
         ad.setPrice(adRequest.getPrice());
         ad.setDescription(adRequest.getDescription());
 
-        String filename = user.getUsername() + "_" + System.currentTimeMillis() + "." + getExtension(imageFile.getOriginalFilename());
+        String filename = user.getUsername() + "_" + System.currentTimeMillis() + "." + getExtension(Objects.requireNonNull(imageFile.getOriginalFilename()));
         Path filePath = Path.of(adDir, filename);
         Files.createDirectories(filePath.getParent());
         Files.copy(imageFile.getInputStream(), filePath);
@@ -139,7 +141,7 @@ public class AdService {
     /**
      * Удаление объявления с проверкой прав доступа
      *
-     * @param id идентификатор объявления
+     * @param id       идентификатор объявления
      * @param username имя пользователя, выполняющего операцию
      * @return true если удаление успешно, false если нет прав или объявление не найдено
      */
@@ -165,9 +167,9 @@ public class AdService {
     /**
      * Обновление информации об объявлении с проверкой прав доступа
      *
-     * @param id идентификатор объявления
+     * @param id            идентификатор объявления
      * @param updateRequest DTO с обновленными данными
-     * @param username имя пользователя, выполняющего операцию
+     * @param username      имя пользователя, выполняющего операцию
      * @return true если обновление успешно, false если нет прав или объявление не найдено
      */
     public boolean updateAd(Long id, AdUpdateRequestDTO updateRequest, String username) {
@@ -196,9 +198,9 @@ public class AdService {
     /**
      * Обновление изображения объявления с проверкой прав доступа
      *
-     * @param id идентификатор объявления
+     * @param id        идентификатор объявления
      * @param imageFile новый файл изображения
-     * @param username имя пользователя, выполняющего операцию
+     * @param username  имя пользователя, выполняющего операцию
      * @return true если обновление успешно, false если нет прав или объявление не найдено
      * @throws IOException при ошибках работы с файловой системой
      */
@@ -222,7 +224,7 @@ public class AdService {
     /**
      * Внутренний метод для обновления изображения объявления
      *
-     * @param ad сущность объявления
+     * @param ad        сущность объявления
      * @param imageFile новый файл изображения
      * @throws IOException при ошибках работы с файловой системой
      */

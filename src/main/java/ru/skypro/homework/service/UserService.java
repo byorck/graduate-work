@@ -22,6 +22,7 @@ import java.awt.image.BufferedImage;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Objects;
 
 import static java.nio.file.StandardOpenOption.CREATE_NEW;
 
@@ -43,23 +44,13 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
 
     /**
-     * Поиск пользователя по имени
-     *
-     * @param username имя пользователя
-     * @return сущность пользователя или null если не найден
-     */
-    public User findUser(String username) {
-        return userRepository.findByUsername(username).orElse(null);
-    }
-
-    /**
      * Получение профиля пользователя
      *
      * @param username имя пользователя
      * @return DTO профиля пользователя или null если пользователь не найден
      */
     public UserProfileResponse getUserProfile(String username) {
-        User user = findUser(username);
+        User user = userRepository.findByUsername(username).orElse(null);
         if (user == null) {
             return null;
         }
@@ -86,7 +77,7 @@ public class UserService {
      * @return true если обновление успешно, false если пользователь не найден
      */
     public boolean updateUserProfile(String username, UserProfileUpdateRequest request) {
-        User user = findUser(username);
+        User user = userRepository.findByUsername(username).orElse(null);
         if (user == null) {
             return false;
         }
@@ -106,7 +97,7 @@ public class UserService {
      * @return true если пользователь является админом или автором объявления
      */
     public boolean hasPermission(Ad ad, String username) {
-        User user = findUser(username);
+        User user = userRepository.findByUsername(username).orElse(null);
         if (user == null) {
             return false;
         }
@@ -128,7 +119,7 @@ public class UserService {
      * @throws IllegalArgumentException если файл слишком большой
      */
     public boolean uploadAvatar(String username, MultipartFile file) throws IOException {
-        User user = findUser(username);
+        User user = userRepository.findByUsername(username).orElse(null);
         if (user == null) {
             return false;
         }
@@ -151,7 +142,7 @@ public class UserService {
     private void uploadAvatarInternal(User user, MultipartFile file) throws IOException {
         log.info("Uploading avatar for user: {}", user.getUsername());
 
-        String extension = getExtension(file.getOriginalFilename());
+        String extension = getExtension(Objects.requireNonNull(file.getOriginalFilename()));
         String filename = user.getUsername() + "." + extension;
         Path filePath = Path.of(avatarsDir, filename);
 
@@ -235,7 +226,7 @@ public class UserService {
      * @return true если старый пароль верный, false если нет или пользователь не найден
      */
     public boolean checkOldPassword(String username, String oldPassword) {
-        User user = findUser(username);
+        User user = userRepository.findByUsername(username).orElse(null);
         return user != null && passwordEncoder.matches(oldPassword, user.getPassword());
     }
 
@@ -252,7 +243,7 @@ public class UserService {
             return false;
         }
 
-        User user = findUser(username);
+        User user = userRepository.findByUsername(username).orElse(null);
         if (user != null) {
             user.setPassword(passwordEncoder.encode(newPassword));
             userRepository.save(user);

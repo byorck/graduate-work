@@ -28,6 +28,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Проверяет endpoints для работы с пользователями
  */
 @WebMvcTest(UserController.class)
+@DisplayName("Тестирование контроллера пользователей")
 class UserControllerTest {
 
     @Autowired

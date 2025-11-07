@@ -30,6 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Проверяет endpoints для работы с объявлениями
  */
 @WebMvcTest(AdController.class)
+@DisplayName("Тестирование контроллера объявлений")
 class AdControllerTest {
 
     @Autowired
