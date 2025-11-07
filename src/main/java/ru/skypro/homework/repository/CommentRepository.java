@@ -15,4 +15,8 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
     @NonNull
     @EntityGraph(attributePaths = {"user"})
     Optional<Comment> findById(Long id);
+
+    Optional<Comment> findByAdIdAndCommentNumber(Long adId, Long commentNumber);
+
+    long countByAdId(Long adId);
 }
