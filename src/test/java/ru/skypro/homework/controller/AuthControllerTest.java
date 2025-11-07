@@ -31,6 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @WebMvcTest(AuthController.class)
 @Import({WebSecurityConfig.class, TestConfig.class})
+@DisplayName("Тестирование контроллера авторизации")
 class AuthControllerTest {
 
     @Autowired

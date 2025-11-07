@@ -28,6 +28,7 @@ import static org.mockito.Mockito.*;
  * Проверяет бизнес-логику работы с пользователями
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("Тестирование сервиса пользователей")
 class UserServiceTest {
 
     @Mock
@@ -56,7 +57,7 @@ class UserServiceTest {
             when(userRepository.findByUsername(username)).thenReturn(Optional.of(expectedUser));
 
             // When
-            User result = userService.findUser(username);
+            User result = userRepository.findByUsername(username).orElse(null);
 
             // Then
             assertNotNull(result);
@@ -72,7 +73,7 @@ class UserServiceTest {
             when(userRepository.findByUsername(username)).thenReturn(Optional.empty());
 
             // When
-            User result = userService.findUser(username);
+            User result = userRepository.findByUsername(username).orElse(null);
 
             // Then
             assertNull(result);

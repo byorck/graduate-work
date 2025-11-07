@@ -12,6 +12,7 @@ import ru.skypro.homework.entity.Ad;
 import ru.skypro.homework.entity.Comment;
 import ru.skypro.homework.entity.User;
 import ru.skypro.homework.repository.CommentRepository;
+import ru.skypro.homework.repository.UserRepository;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -23,7 +24,7 @@ import java.util.stream.Collectors;
 public class CommentService {
     private final CommentRepository commentRepository;
     private final AdService adService;
-    private final UserService userService;
+    private final UserRepository userRepository;
 
     /**
      * Получение всех комментариев для объявления
@@ -55,7 +56,7 @@ public class CommentService {
     public CommentDTO addComment(Long adId, CreateOrUpdateCommentDTO dto, String username) {
         log.debug("Adding comment to ad {} by user {}", adId, username);
         Ad ad = adService.getAdEntityById(adId);
-        User user = userService.findUser(username);
+        User user = userRepository.findByUsername(username).orElse(null);
 
         if (ad == null || user == null) {
             log.warn("Failed to add comment: ad {} or user {} not found", adId, username);
@@ -148,7 +149,7 @@ public class CommentService {
      * @return true если пользователь является админом, автором комментария или автором объявления
      */
     private boolean hasDeletePermission(Comment comment, String username) {
-        User user = userService.findUser(username);
+        User user = userRepository.findByUsername(username).orElse(null);
         if (user == null) return false;
         if (user.getRole() == Role.ADMIN) return true;
 
