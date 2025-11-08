@@ -25,7 +25,7 @@ public class AdFullResponseDTO {
         this.authorLastName = ad.getUser().getLastName();
         this.email = ad.getUser().getUsername();
         this.phone = ad.getUser().getPhone();
-        this.image = "/ads/" + ad.getId() + "/image"; // Исправить путь
+        this.image = "/ads/" + ad.getId() + "/image";
         this.price = ad.getPrice();
         this.title = ad.getTitle();
         this.description = ad.getDescription();

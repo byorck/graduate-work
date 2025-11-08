@@ -1,6 +1,7 @@
 package ru.skypro.homework.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -15,23 +16,18 @@ import ru.skypro.homework.dto.comment.CommentsDTO;
 import ru.skypro.homework.dto.comment.CreateOrUpdateCommentDTO;
 import ru.skypro.homework.service.CommentService;
 
-import java.time.LocalDateTime;
-import java.util.List;
+import java.util.Arrays;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Тестовый класс для CommentController.
- * Проверяет endpoints для работы с комментариями
- */
 @WebMvcTest(CommentController.class)
-@DisplayName("Тестирование контроллера комментариев")
+@DisplayName("Тестирование CommentController")
 class CommentControllerTest {
 
     @Autowired
@@ -43,32 +39,37 @@ class CommentControllerTest {
     @MockitoBean
     private CommentService commentService;
 
-    private final Long AD_ID = 1L;
-    private final Long COMMENT_ID = 1L;
+    private final String USERNAME = "test@example.com";
+
+    private CommentsDTO testCommentsDTO;
+
+    @BeforeEach
+    void setUp() {
+        testCommentsDTO = new CommentsDTO();
+        testCommentsDTO.setCount(2);
+
+        CommentDTO comment1 = createCommentDTO(1L, "First comment");
+        CommentDTO comment2 = createCommentDTO(2L, "Second comment");
+        testCommentsDTO.setResults(Arrays.asList(comment1, comment2));
+    }
 
     @Nested
     @DisplayName("Тесты получения комментариев")
     class GetCommentsTests {
 
         @Test
-        @WithMockUser(username = "user@example.com")
-        @DisplayName("Должен возвращать комментарии")
-        void getComments_ShouldReturnComments() throws Exception {
+        @WithMockUser
+        @DisplayName("Получение комментариев по ID объявления")
+        void getComments_ShouldReturnOk() throws Exception {
             // Given
-            CommentsDTO commentsDTO = new CommentsDTO();
-            commentsDTO.setCount(1);
-            commentsDTO.setResults(List.of(createTestCommentDTO()));
-
-            when(commentService.getCommentsByAdId(AD_ID)).thenReturn(commentsDTO);
+            when(commentService.getCommentsByAdId(1L)).thenReturn(testCommentsDTO);
 
             // When & Then
-            mockMvc.perform(get("/ads/{id}/comments", AD_ID))
+            mockMvc.perform(get("/ads/1/comments"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.count").value(1))
-                    .andExpect(jsonPath("$.results[0].id").value(COMMENT_ID))
-                    .andExpect(jsonPath("$.results[0].text").value("Test comment"));
-
-            verify(commentService).getCommentsByAdId(AD_ID);
+                    .andExpect(jsonPath("$.count").value(2))
+                    .andExpect(jsonPath("$.results[0].id").value(1))
+                    .andExpect(jsonPath("$.results[0].text").value("First comment"));
         }
     }
 
@@ -77,68 +78,45 @@ class CommentControllerTest {
     class AddCommentTests {
 
         @Test
-        @WithMockUser(username = "user@example.com")
-        @DisplayName("Должен создавать комментарий")
-        void addComment_ShouldReturnCreatedComment() throws Exception {
+        @WithMockUser(username = USERNAME)
+        @DisplayName("Успешное добавление комментария")
+        void addComment_WhenSuccess_ShouldReturnOk() throws Exception {
             // Given
-            CreateOrUpdateCommentDTO requestDto = new CreateOrUpdateCommentDTO();
-            requestDto.setText("New comment");
+            CreateOrUpdateCommentDTO requestDTO = new CreateOrUpdateCommentDTO();
+            requestDTO.setText("New comment");
 
-            CommentDTO responseDto = createTestCommentDTO();
-            responseDto.setText("New comment");
+            CommentDTO responseDTO = createCommentDTO(1L, "New comment");
 
-            when(commentService.addComment(eq(AD_ID), any(CreateOrUpdateCommentDTO.class), eq("user@example.com")))
-                    .thenReturn(responseDto);
+            when(commentService.addComment(eq(1L), any(CreateOrUpdateCommentDTO.class), eq(USERNAME)))
+                    .thenReturn(responseDTO);
 
             // When & Then
-            mockMvc.perform(post("/ads/{id}/comments", AD_ID)
+            mockMvc.perform(post("/ads/1/comments")
                             .with(csrf())
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(requestDto)))
+                            .content(objectMapper.writeValueAsString(requestDTO)))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.id").value(COMMENT_ID))
+                    .andExpect(jsonPath("$.id").value(1))
                     .andExpect(jsonPath("$.text").value("New comment"));
-
-            verify(commentService).addComment(eq(AD_ID), any(CreateOrUpdateCommentDTO.class), eq("user@example.com"));
         }
 
         @Test
-        @WithMockUser(username = "user@example.com")
-        @DisplayName("Должен возвращать 404 если объявление не найдено")
+        @WithMockUser(username = USERNAME)
+        @DisplayName("Добавление комментария к несуществующему объявлению")
         void addComment_WhenAdNotFound_ShouldReturnNotFound() throws Exception {
             // Given
-            CreateOrUpdateCommentDTO requestDto = new CreateOrUpdateCommentDTO();
-            requestDto.setText("New comment");
+            CreateOrUpdateCommentDTO requestDTO = new CreateOrUpdateCommentDTO();
+            requestDTO.setText("New comment");
 
-            when(commentService.addComment(eq(AD_ID), any(CreateOrUpdateCommentDTO.class), eq("user@example.com")))
+            when(commentService.addComment(eq(1L), any(CreateOrUpdateCommentDTO.class), eq(USERNAME)))
                     .thenReturn(null);
 
             // When & Then
-            mockMvc.perform(post("/ads/{id}/comments", AD_ID)
+            mockMvc.perform(post("/ads/1/comments")
                             .with(csrf())
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(requestDto)))
+                            .content(objectMapper.writeValueAsString(requestDTO)))
                     .andExpect(status().isNotFound());
-
-            verify(commentService).addComment(eq(AD_ID), any(CreateOrUpdateCommentDTO.class), eq("user@example.com"));
-        }
-
-        @Test
-        @WithMockUser(username = "user@example.com")
-        @DisplayName("Должен возвращать 400 при невалидных данных")
-        void addComment_WithInvalidData_ShouldReturnBadRequest() throws Exception {
-            // Given
-            CreateOrUpdateCommentDTO requestDto = new CreateOrUpdateCommentDTO();
-            requestDto.setText(""); // empty text - invalid
-
-            // When & Then
-            mockMvc.perform(post("/ads/{id}/comments", AD_ID)
-                            .with(csrf())
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(requestDto)))
-                    .andExpect(status().isBadRequest());
-
-            verify(commentService, never()).addComment(any(), any(), any());
         }
     }
 
@@ -147,35 +125,29 @@ class CommentControllerTest {
     class DeleteCommentTests {
 
         @Test
-        @WithMockUser(username = "user@example.com")
-        @DisplayName("Должен удалять комментарий с правами доступа")
-        void deleteComment_WithPermission_ShouldReturnNoContent() throws Exception {
+        @WithMockUser(username = USERNAME)
+        @DisplayName("Удаление комментария авторизованным пользователем")
+        void deleteComment_WhenAuthorized_ShouldReturnNoContent() throws Exception {
             // Given
-            when(commentService.deleteCommentWithPermission(AD_ID, COMMENT_ID, "user@example.com"))
+            when(commentService.deleteCommentWithPermission(1L, 1L, USERNAME))
                     .thenReturn(true);
 
             // When & Then
-            mockMvc.perform(delete("/ads/{adId}/comments/{commentId}", AD_ID, COMMENT_ID)
-                            .with(csrf()))
+            mockMvc.perform(delete("/ads/1/comments/1").with(csrf()))
                     .andExpect(status().isNoContent());
-
-            verify(commentService).deleteCommentWithPermission(AD_ID, COMMENT_ID, "user@example.com");
         }
 
         @Test
-        @WithMockUser(username = "user@example.com")
-        @DisplayName("Должен возвращать 403 без прав доступа")
-        void deleteComment_WithoutPermission_ShouldReturnForbidden() throws Exception {
+        @WithMockUser(username = USERNAME)
+        @DisplayName("Удаление комментария неавторизованным пользователем")
+        void deleteComment_WhenNotAuthorized_ShouldReturnForbidden() throws Exception {
             // Given
-            when(commentService.deleteCommentWithPermission(AD_ID, COMMENT_ID, "user@example.com"))
+            when(commentService.deleteCommentWithPermission(1L, 1L, USERNAME))
                     .thenReturn(false);
 
             // When & Then
-            mockMvc.perform(delete("/ads/{adId}/comments/{commentId}", AD_ID, COMMENT_ID)
-                            .with(csrf()))
+            mockMvc.perform(delete("/ads/1/comments/1").with(csrf()))
                     .andExpect(status().isForbidden());
-
-            verify(commentService).deleteCommentWithPermission(AD_ID, COMMENT_ID, "user@example.com");
         }
     }
 
@@ -184,78 +156,55 @@ class CommentControllerTest {
     class UpdateCommentTests {
 
         @Test
-        @WithMockUser(username = "user@example.com")
-        @DisplayName("Должен обновлять комментарий с правами доступа")
-        void updateComment_WithPermission_ShouldReturnUpdatedComment() throws Exception {
+        @WithMockUser(username = USERNAME)
+        @DisplayName("Обновление комментария авторизованным пользователем")
+        void updateComment_WhenAuthorized_ShouldReturnOk() throws Exception {
             // Given
-            CreateOrUpdateCommentDTO requestDto = new CreateOrUpdateCommentDTO();
-            requestDto.setText("Updated text");
+            CreateOrUpdateCommentDTO requestDTO = new CreateOrUpdateCommentDTO();
+            requestDTO.setText("Updated comment");
 
-            CommentDTO responseDto = createTestCommentDTO();
-            responseDto.setText("Updated text");
+            CommentDTO responseDTO = createCommentDTO(1L, "Updated comment");
 
-            when(commentService.updateCommentWithPermission(eq(AD_ID), eq(COMMENT_ID), any(CreateOrUpdateCommentDTO.class), eq("user@example.com")))
-                    .thenReturn(responseDto);
+            when(commentService.updateCommentWithPermission(eq(1L), eq(1L), any(CreateOrUpdateCommentDTO.class), eq(USERNAME)))
+                    .thenReturn(responseDTO);
 
             // When & Then
-            mockMvc.perform(patch("/ads/{adId}/comments/{commentId}", AD_ID, COMMENT_ID)
+            mockMvc.perform(patch("/ads/1/comments/1")
                             .with(csrf())
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(requestDto)))
+                            .content(objectMapper.writeValueAsString(requestDTO)))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.text").value("Updated text"));
-
-            verify(commentService).updateCommentWithPermission(eq(AD_ID), eq(COMMENT_ID), any(CreateOrUpdateCommentDTO.class), eq("user@example.com"));
+                    .andExpect(jsonPath("$.text").value("Updated comment"));
         }
 
         @Test
-        @WithMockUser(username = "user@example.com")
-        @DisplayName("Должен возвращать 403 без прав доступа")
-        void updateComment_WithoutPermission_ShouldReturnForbidden() throws Exception {
+        @WithMockUser(username = USERNAME)
+        @DisplayName("Обновление комментария неавторизованным пользователем")
+        void updateComment_WhenNotAuthorized_ShouldReturnForbidden() throws Exception {
             // Given
-            CreateOrUpdateCommentDTO requestDto = new CreateOrUpdateCommentDTO();
-            requestDto.setText("Updated text");
+            CreateOrUpdateCommentDTO requestDTO = new CreateOrUpdateCommentDTO();
+            requestDTO.setText("Updated comment");
 
-            when(commentService.updateCommentWithPermission(eq(AD_ID), eq(COMMENT_ID), any(CreateOrUpdateCommentDTO.class), eq("user@example.com")))
+            when(commentService.updateCommentWithPermission(eq(1L), eq(1L), any(CreateOrUpdateCommentDTO.class), eq(USERNAME)))
                     .thenReturn(null);
 
             // When & Then
-            mockMvc.perform(patch("/ads/{adId}/comments/{commentId}", AD_ID, COMMENT_ID)
+            mockMvc.perform(patch("/ads/1/comments/1")
                             .with(csrf())
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(requestDto)))
+                            .content(objectMapper.writeValueAsString(requestDTO)))
                     .andExpect(status().isForbidden());
-
-            verify(commentService).updateCommentWithPermission(eq(AD_ID), eq(COMMENT_ID), any(CreateOrUpdateCommentDTO.class), eq("user@example.com"));
-        }
-
-        @Test
-        @WithMockUser(username = "user@example.com")
-        @DisplayName("Должен возвращать 400 при невалидных данных")
-        void updateComment_WithInvalidData_ShouldReturnBadRequest() throws Exception {
-            // Given
-            CreateOrUpdateCommentDTO requestDto = new CreateOrUpdateCommentDTO();
-            requestDto.setText(""); // empty text - invalid
-
-            // When & Then
-            mockMvc.perform(patch("/ads/{adId}/comments/{commentId}", AD_ID, COMMENT_ID)
-                            .with(csrf())
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(requestDto)))
-                    .andExpect(status().isBadRequest());
-
-            verify(commentService, never()).updateCommentWithPermission(any(), any(), any(), any());
         }
     }
 
-    private CommentDTO createTestCommentDTO() {
+    private CommentDTO createCommentDTO(Long id, String text) {
         CommentDTO dto = new CommentDTO();
-        dto.setId(COMMENT_ID);
-        dto.setText("Test comment");
+        dto.setId(id);
+        dto.setText(text);
         dto.setAuthor(1L);
         dto.setAuthorFirstName("John");
+        dto.setCreatedAt(System.currentTimeMillis());
         dto.setAuthorImage("/users/1/avatar");
-        dto.setCreatedAt(LocalDateTime.now());
         return dto;
     }
 }

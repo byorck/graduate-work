@@ -76,17 +76,27 @@ public class UserService {
      * @param request  DTO с обновленными данными
      * @return true если обновление успешно, false если пользователь не найден
      */
-    public boolean updateUserProfile(String username, UserProfileUpdateRequest request) {
+    public UserProfileResponse updateUserProfile(String username, UserProfileUpdateRequest request) {
         User user = userRepository.findByUsername(username).orElse(null);
         if (user == null) {
-            return false;
+            return null;
         }
 
         user.setFirstName(request.getFirstName());
         user.setLastName(request.getLastName());
         user.setPhone(request.getPhone());
+
+        if (request.getRole() != null) {
+            try {
+                user.setRole(Role.valueOf(request.getRole()));
+            } catch (IllegalArgumentException e) {
+                log.warn("Invalid role provided: {}", request.getRole());
+            }
+        }
+
         userRepository.save(user);
-        return true;
+
+        return getUserProfile(username);
     }
 
     /**

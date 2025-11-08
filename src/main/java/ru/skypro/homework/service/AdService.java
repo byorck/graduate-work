@@ -90,7 +90,7 @@ public class AdService {
 
         Ad savedAd = adRepository.save(ad);
         log.info("Ad {} created successfully by user {}", savedAd.getId(), username);
-        return toAdFullResponse(savedAd);
+        return new AdFullResponseDTO(savedAd);
     }
 
     /**
@@ -134,7 +134,7 @@ public class AdService {
      */
     public AdFullResponseDTO getAdById(Long id) {
         return adRepository.findById(id)
-                .map(this::toAdFullResponse)
+                .map(AdFullResponseDTO::new)
                 .orElse(null);
     }
 
@@ -172,27 +172,27 @@ public class AdService {
      * @param username      имя пользователя, выполняющего операцию
      * @return true если обновление успешно, false если нет прав или объявление не найдено
      */
-    public boolean updateAd(Long id, AdUpdateRequestDTO updateRequest, String username) {
+    public AdFullResponseDTO updateAd(Long id, AdUpdateRequestDTO updateRequest, String username) {
         log.debug("Updating ad {} by user {}", id, username);
 
         Optional<Ad> optAd = adRepository.findById(id);
         if (optAd.isEmpty()) {
-            return false;
+            return null;
         }
 
         Ad ad = optAd.get();
         if (!userService.hasPermission(ad, username)) {
             log.warn("User {} attempted to update ad {} without permission", username, id);
-            return false;
+            return null;
         }
 
         ad.setTitle(updateRequest.getTitle());
         ad.setPrice(updateRequest.getPrice());
         ad.setDescription(updateRequest.getDescription());
-        adRepository.save(ad);
+        Ad savedAd = adRepository.save(ad);
 
         log.info("Ad {} updated successfully by user {}", id, username);
-        return true;
+        return new AdFullResponseDTO(savedAd);
     }
 
     /**
@@ -260,16 +260,6 @@ public class AdService {
     }
 
     /**
-     * Получение сущности объявления по идентификатору
-     *
-     * @param id идентификатор объявления
-     * @return сущность объявления или null если не найдено
-     */
-    public Ad getAdEntityById(Long id) {
-        return adRepository.findById(id).orElse(null);
-    }
-
-    /**
      * Преобразование сущности в DTO для краткого представления
      */
     private AdShortResponseDTO toAdShortResponse(Ad ad) {
@@ -279,23 +269,6 @@ public class AdService {
         dto.setImage("/ads/" + ad.getId() + "/image");
         dto.setPrice(ad.getPrice());
         dto.setTitle(ad.getTitle());
-        return dto;
-    }
-
-    /**
-     * Преобразование сущности в DTO для полного представления
-     */
-    private AdFullResponseDTO toAdFullResponse(Ad ad) {
-        AdFullResponseDTO dto = new AdFullResponseDTO();
-        dto.setPk(ad.getId());
-        dto.setAuthorFirstName(ad.getUser().getFirstName());
-        dto.setAuthorLastName(ad.getUser().getLastName());
-        dto.setEmail(ad.getUser().getUsername());
-        dto.setPhone(ad.getUser().getPhone());
-        dto.setImage("/ads/" + ad.getId() + "/image");
-        dto.setPrice(ad.getPrice());
-        dto.setTitle(ad.getTitle());
-        dto.setDescription(ad.getDescription());
         return dto;
     }
 
