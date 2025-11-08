@@ -54,16 +54,13 @@ public class WebSecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(AUTH_WHITELIST).permitAll()
-                        .requestMatchers("/admin/**").hasRole("ADMIN")
                         .requestMatchers("/ads/**", "/users/**").authenticated()
                         .anyRequest().authenticated()
                 )
                 .userDetailsService(customUserDetailsService)
                 .cors(withDefaults())
-                .formLogin(AbstractHttpConfigurer::disable
-                )
-                .httpBasic(AbstractHttpConfigurer::disable
-                )
+                .httpBasic(withDefaults())
+                .formLogin(AbstractHttpConfigurer::disable)
                 .logout(logout -> logout
                         .logoutUrl("/logout")
                         .logoutSuccessHandler((request, response, authentication) -> response.setStatus(200))

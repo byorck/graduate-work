@@ -19,7 +19,7 @@ import ru.skypro.homework.service.CommentService;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/ads")
-@Tag(name = "Комментарии")
+@Tag(name = "Комментарии", description = "API для работы с комментариями пользователей")
 public class CommentController {
     private final CommentService commentService;
 

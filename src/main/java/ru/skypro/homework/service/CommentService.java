@@ -11,9 +11,11 @@ import ru.skypro.homework.dto.comment.CreateOrUpdateCommentDTO;
 import ru.skypro.homework.entity.Ad;
 import ru.skypro.homework.entity.Comment;
 import ru.skypro.homework.entity.User;
+import ru.skypro.homework.repository.AdRepository;
 import ru.skypro.homework.repository.CommentRepository;
 import ru.skypro.homework.repository.UserRepository;
 
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -23,7 +25,7 @@ import java.util.stream.Collectors;
 @Transactional
 public class CommentService {
     private final CommentRepository commentRepository;
-    private final AdService adService;
+    private final AdRepository adRepository;
     private final UserRepository userRepository;
 
     /**
@@ -55,7 +57,7 @@ public class CommentService {
      */
     public CommentDTO addComment(Long adId, CreateOrUpdateCommentDTO dto, String username) {
         log.debug("Adding comment to ad {} by user {}", adId, username);
-        Ad ad = adService.getAdEntityById(adId);
+        Ad ad = adRepository.findById(adId).orElse(null);
         User user = userRepository.findByUsername(username).orElse(null);
 
         if (ad == null || user == null) {
@@ -170,7 +172,7 @@ public class CommentService {
         dto.setText(comment.getText());
         dto.setAuthor(comment.getUser().getId());
         dto.setAuthorFirstName(comment.getUser().getFirstName());
-        dto.setCreatedAt(comment.getCreatedAt());
+        dto.setCreatedAt(comment.getCreatedAt().toEpochSecond(ZoneOffset.UTC) * 1000);
 
         String avatarUrl = "/users/" + comment.getUser().getId() + "/avatar";
         dto.setAuthorImage(avatarUrl);

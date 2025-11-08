@@ -1,5 +1,6 @@
 package ru.skypro.homework.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -11,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import ru.skypro.homework.dto.ad.AdCreateRequestDTO;
 import ru.skypro.homework.dto.ad.AdFullResponseDTO;
 import ru.skypro.homework.dto.ad.AdUpdateRequestDTO;
 import ru.skypro.homework.service.AdService;
@@ -26,24 +28,30 @@ import java.util.Map;
 @RestController
 @RequestMapping("/ads")
 @RequiredArgsConstructor
-@Tag(name = "Объявления")
+@Tag(name = "Объявления", description = "API для работы с объявлениями")
 public class AdController {
     private final AdService adService;
 
     /**
      * Создание нового объявления
      */
-    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Добавление объявления")
-    public ResponseEntity<AdFullResponseDTO> createAd(
-            @RequestParam String title,
-            @RequestParam Integer price,
-            @RequestParam String description,
+    public ResponseEntity<?> createAd(
+            @RequestPart("properties") String propertiesJson,
             @RequestPart("image") MultipartFile imageFile,
             Authentication authentication) throws IOException {
 
-        log.info("Creating ad for user: {}", authentication.getName());
-        AdFullResponseDTO response = adService.createAd(authentication.getName(), title, price, description, imageFile);
+        ObjectMapper mapper = new ObjectMapper();
+        AdCreateRequestDTO properties = mapper.readValue(propertiesJson, AdCreateRequestDTO.class);
+
+        AdFullResponseDTO response = adService.createAd(
+                authentication.getName(),
+                properties.getTitle(),
+                properties.getPrice(),
+                properties.getDescription(),
+                imageFile
+        );
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
@@ -82,11 +90,11 @@ public class AdController {
      */
     @PatchMapping("/{id}")
     @Operation(summary = "Обновление информации об объявлении")
-    public ResponseEntity<Void> updateAd(@PathVariable Long id,
-                                         @RequestBody @Valid AdUpdateRequestDTO updateRequest,
-                                         Authentication authentication) {
-        boolean updated = adService.updateAd(id, updateRequest, authentication.getName());
-        return updated ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
+    public ResponseEntity<?> updateAd(@PathVariable Long id,
+                                      @RequestBody @Valid AdUpdateRequestDTO updateRequest,
+                                      Authentication authentication) {
+        AdFullResponseDTO updatedAd = adService.updateAd(id, updateRequest, authentication.getName());
+        return updatedAd != null ? ResponseEntity.ok(updatedAd) : ResponseEntity.notFound().build();
     }
 
     /**
@@ -104,12 +112,11 @@ public class AdController {
      */
     @PatchMapping(value = "/{id}/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Обновление картинки объявления")
-    public ResponseEntity<Void> updateAdImage(
+    public ResponseEntity<?> updateAdImage(
             @PathVariable Long id,
-            @RequestPart("imageFile") MultipartFile imageFile,
+            @RequestParam("image") MultipartFile imageFile,
             Authentication auth) throws IOException {
-
         boolean updated = adService.updateAdImage(id, imageFile, auth.getName());
-        return updated ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
+        return updated ? ResponseEntity.ok().build() : ResponseEntity.notFound().build();
     }
 }

@@ -19,7 +19,7 @@ import java.io.IOException;
 @RestController
 @RequestMapping("users")
 @RequiredArgsConstructor
-@Tag(name = "Пользователи")
+@Tag(name = "Пользователи", description = "API для работы с данными авторизированного пользователя")
 public class UserController {
     private final UserService userService;
 
@@ -28,9 +28,11 @@ public class UserController {
      */
     @PatchMapping(value = "/me/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Обновление аватара авторизованного пользователя")
-    public ResponseEntity<?> uploadAvatar(Authentication authentication, @RequestParam MultipartFile avatar) throws IOException {
+    public ResponseEntity<?> uploadAvatar(
+            Authentication authentication,
+            @RequestParam("image") MultipartFile image) throws IOException { // Изменить на "image"
         String username = authentication.getName();
-        boolean success = userService.uploadAvatar(username, avatar);
+        boolean success = userService.uploadAvatar(username, image);
         return success ? ResponseEntity.ok().build() : ResponseEntity.status(HttpStatus.NOT_FOUND).build();
     }
 
@@ -61,9 +63,9 @@ public class UserController {
      */
     @PatchMapping("/me")
     @Operation(summary = "Обновление информации об авторизованном пользователе")
-    public ResponseEntity<?> updateProfile(Authentication authentication, @RequestBody UserProfileUpdateRequest request) {
-        String username = authentication.getName();
-        boolean success = userService.updateUserProfile(username, request);
-        return success ? ResponseEntity.ok().build() : ResponseEntity.notFound().build();
+    public ResponseEntity<?> updateProfile(Authentication authentication,
+                                           @RequestBody UserProfileUpdateRequest request) {
+        UserProfileResponse updatedUser = userService.updateUserProfile(authentication.getName(), request);
+        return updatedUser != null ? ResponseEntity.ok(updatedUser) : ResponseEntity.notFound().build();
     }
 }
