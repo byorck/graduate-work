@@ -53,19 +53,27 @@ public class AuthController {
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
-            HttpSession session = request.getSession(true);
-            session.setAttribute("SPRING_SECURITY_CONTEXT", SecurityContextHolder.getContext());
+            HttpSession oldSession = request.getSession(false);
+            if (oldSession != null) {
+                oldSession.invalidate();
+            }
+
+            HttpSession newSession = request.getSession(true);
+            newSession.setAttribute("SPRING_SECURITY_CONTEXT", SecurityContextHolder.getContext());
+            newSession.setMaxInactiveInterval(30 * 60);
 
             Map<String, Object> response = new HashMap<>();
             response.put("status", "success");
             response.put("username", login.getUsername());
-            response.put("sessionId", session.getId());
+            response.put("sessionId", newSession.getId());
             response.put("message", "Successfully logged in");
 
-            log.info("User {} successfully authenticated via custom login. Session: {}",
-                    login.getUsername(), session.getId());
+            log.info("User {} successfully authenticated. New session: {}",
+                    login.getUsername(), newSession.getId());
 
-            return ResponseEntity.ok(response);
+            return ResponseEntity.ok()
+                    .header("Cache-Control", "no-cache, no-store, must-revalidate")
+                    .body(response);
 
         } catch (Exception e) {
             log.warn("Failed authentication attempt for user: {}", login.getUsername());
@@ -74,7 +82,9 @@ public class AuthController {
             errorResponse.put("status", "error");
             errorResponse.put("message", "Invalid username or password");
 
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorResponse);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .header("Cache-Control", "no-cache, no-store, must-revalidate")
+                    .body(errorResponse);
         }
     }
 

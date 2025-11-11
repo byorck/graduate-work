@@ -27,7 +27,10 @@ public class WebSecurityConfig {
             "/webjars/**",
             "/login",
             "/register",
-            "/logout"
+            "/logout",
+            "/ads/*/image",
+            "/users/*/avatar",
+            "/images/**"
     };
 
     private final CustomUserDetailsService customUserDetailsService;
@@ -51,9 +54,10 @@ public class WebSecurityConfig {
                         .sessionCreationPolicy(SessionCreationPolicy.ALWAYS)
                         .maximumSessions(1)
                         .maxSessionsPreventsLogin(false)
+                        .expiredUrl("/login?expired")
                 )
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(AUTH_WHITELIST).permitAll()
+                        .requestMatchers(AUTH_WHITELIST).permitAll() // публичный доступ
                         .requestMatchers("/ads/**", "/users/**").authenticated()
                         .anyRequest().authenticated()
                 )
@@ -63,7 +67,11 @@ public class WebSecurityConfig {
                 .formLogin(AbstractHttpConfigurer::disable)
                 .logout(logout -> logout
                         .logoutUrl("/logout")
-                        .logoutSuccessHandler((request, response, authentication) -> response.setStatus(200))
+                        .logoutSuccessHandler((request, response, authentication) -> {
+                            response.setStatus(200);
+
+                            response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+                        })
                         .invalidateHttpSession(true)
                         .deleteCookies("JSESSIONID")
                         .permitAll()
