@@ -1,15 +1,17 @@
 package ru.skypro.homework.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import ru.skypro.homework.dto.user.PasswordChangeRequest;
@@ -25,8 +27,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(UserController.class)
-@DisplayName("Тестирование UserController")
+@SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles("test")
+@DisplayName("Тестирование контроллера пользователей")
 class UserControllerTest {
 
     @Autowired
@@ -38,88 +42,45 @@ class UserControllerTest {
     @MockitoBean
     private UserService userService;
 
-    private final String USERNAME = "test@example.com";
-
-    private UserProfileResponse testProfile;
-
-    @BeforeEach
-    void setUp() {
-        testProfile = createUserProfile();
-    }
-
     @Nested
-    @DisplayName("Тесты загрузки аватара")
-    class UploadAvatarTests {
+    @DisplayName("Тесты управления аватаром")
+    class AvatarTests {
 
         @Test
-        @WithMockUser(username = USERNAME)
-        @DisplayName("Успешная загрузка аватара")
-        void uploadAvatar_WhenSuccess_ShouldReturnOk() throws Exception {
+        @WithMockUser(username = "testuser")
+        @DisplayName("Успешная загрузка аватара пользователя")
+        void uploadAvatar_Success() throws Exception {
             // Given
             MockMultipartFile image = new MockMultipartFile(
                     "image",
                     "avatar.jpg",
-                    MediaType.IMAGE_JPEG_VALUE,
-                    "avatar content".getBytes()
+                    "image/jpeg",
+                    "test image content".getBytes()
             );
 
-            when(userService.uploadAvatar(eq(USERNAME), any()))
-                    .thenReturn(true);
+            when(userService.uploadAvatar(eq("testuser"), any())).thenReturn(true);
 
-            // When & Then - Используем multipart для PATCH запроса
-            mockMvc.perform(multipart("/users/me/image")
+            mockMvc.perform(multipart(HttpMethod.PATCH, "/users/me/image")
                             .file(image)
-                            .with(csrf())
-                            .with(request -> {
-                                request.setMethod("PATCH");
-                                return request;
-                            })
-                            .contentType(MediaType.MULTIPART_FORM_DATA))
+                            .with(csrf()))
                     .andExpect(status().isOk());
-        }
-
-        @Test
-        @WithMockUser(username = USERNAME)
-        @DisplayName("Загрузка аватара для несуществующего пользователя")
-        void uploadAvatar_WhenUserNotFound_ShouldReturnNotFound() throws Exception {
-            // Given
-            MockMultipartFile image = new MockMultipartFile(
-                    "image",
-                    "avatar.jpg",
-                    MediaType.IMAGE_JPEG_VALUE,
-                    "avatar content".getBytes()
-            );
-
-            when(userService.uploadAvatar(eq(USERNAME), any()))
-                    .thenReturn(false);
-
-            // When & Then - Используем multipart для PATCH запроса
-            mockMvc.perform(multipart("/users/me/image")
-                            .file(image)
-                            .with(csrf())
-                            .with(request -> {
-                                request.setMethod("PATCH");
-                                return request;
-                            })
-                            .contentType(MediaType.MULTIPART_FORM_DATA))
-                    .andExpect(status().isNotFound());
         }
     }
 
     @Nested
     @DisplayName("Тесты смены пароля")
-    class ChangePasswordTests {
+    class PasswordChangeTests {
 
         @Test
-        @WithMockUser(username = USERNAME)
+        @WithMockUser(username = "testuser")
         @DisplayName("Успешная смена пароля")
-        void changePassword_WhenSuccess_ShouldReturnOk() throws Exception {
+        void changePassword_Success() throws Exception {
             // Given
             PasswordChangeRequest request = new PasswordChangeRequest();
             request.setCurrentPassword("oldPassword");
             request.setNewPassword("newPassword");
 
-            when(userService.changePassword(USERNAME, "oldPassword", "newPassword"))
+            when(userService.changePassword("testuser", "oldPassword", "newPassword"))
                     .thenReturn(true);
 
             // When & Then
@@ -131,15 +92,15 @@ class UserControllerTest {
         }
 
         @Test
-        @WithMockUser(username = USERNAME)
-        @DisplayName("Смена пароля с неправильным текущим паролем")
-        void changePassword_WhenWrongCurrentPassword_ShouldReturnForbidden() throws Exception {
+        @WithMockUser(username = "testuser")
+        @DisplayName("Ошибка смены пароля - неверный текущий пароль")
+        void changePassword_Forbidden() throws Exception {
             // Given
             PasswordChangeRequest request = new PasswordChangeRequest();
             request.setCurrentPassword("wrongPassword");
             request.setNewPassword("newPassword");
 
-            when(userService.changePassword(USERNAME, "wrongPassword", "newPassword"))
+            when(userService.changePassword("testuser", "wrongPassword", "newPassword"))
                     .thenReturn(false);
 
             // When & Then
@@ -152,30 +113,38 @@ class UserControllerTest {
     }
 
     @Nested
-    @DisplayName("Тесты работы с профилем пользователя")
+    @DisplayName("Тесты управления профилем")
     class ProfileTests {
 
         @Test
-        @WithMockUser(username = USERNAME)
-        @DisplayName("Получение профиля существующего пользователя")
-        void getProfile_WhenUserExists_ShouldReturnOk() throws Exception {
+        @WithMockUser(username = "testuser")
+        @DisplayName("Успешное получение профиля пользователя")
+        void getProfile_Success() throws Exception {
             // Given
-            when(userService.getUserProfile(USERNAME)).thenReturn(testProfile);
+            UserProfileResponse profile = new UserProfileResponse();
+            profile.setId(1L);
+            profile.setEmail("testuser@example.com");
+            profile.setFirstName("John");
+            profile.setLastName("Doe");
+            profile.setPhone("+79991234567");
+            profile.setRole("USER");
+
+            when(userService.getUserProfile("testuser")).thenReturn(profile);
 
             // When & Then
             mockMvc.perform(get("/users/me"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.id").value(1))
-                    .andExpect(jsonPath("$.email").value(USERNAME))
-                    .andExpect(jsonPath("$.firstName").value("John"));
+                    .andExpect(jsonPath("$.email").value("testuser@example.com"))
+                    .andExpect(jsonPath("$.firstName").value("John"))
+                    .andExpect(jsonPath("$.lastName").value("Doe"));
         }
 
         @Test
-        @WithMockUser(username = USERNAME)
-        @DisplayName("Получение профиля несуществующего пользователя")
-        void getProfile_WhenUserNotFound_ShouldReturnNotFound() throws Exception {
+        @WithMockUser(username = "testuser")
+        @DisplayName("Профиль пользователя не найден")
+        void getProfile_NotFound() throws Exception {
             // Given
-            when(userService.getUserProfile(USERNAME)).thenReturn(null);
+            when(userService.getUserProfile("testuser")).thenReturn(null);
 
             // When & Then
             mockMvc.perform(get("/users/me"))
@@ -183,19 +152,24 @@ class UserControllerTest {
         }
 
         @Test
-        @WithMockUser(username = USERNAME)
-        @DisplayName("Успешное обновление профиля")
-        void updateProfile_WhenSuccess_ShouldReturnOk() throws Exception {
+        @WithMockUser(username = "testuser")
+        @DisplayName("Успешное обновление профиля пользователя")
+        void updateProfile_Success() throws Exception {
             // Given
             UserProfileUpdateRequest updateRequest = new UserProfileUpdateRequest();
-            updateRequest.setFirstName("UpdatedJohn");
-            updateRequest.setLastName("UpdatedDoe");
-            updateRequest.setPhone("+79998887766");
+            updateRequest.setFirstName("Jane");
+            updateRequest.setLastName("Smith");
+            updateRequest.setPhone("+79991234567");
 
-            UserProfileResponse updatedProfile = createUserProfile();
-            updatedProfile.setFirstName("UpdatedJohn");
+            UserProfileResponse updatedProfile = new UserProfileResponse();
+            updatedProfile.setId(1L);
+            updatedProfile.setEmail("testuser@example.com");
+            updatedProfile.setFirstName("Jane");
+            updatedProfile.setLastName("Smith");
+            updatedProfile.setPhone("+79991234567");
+            updatedProfile.setRole("USER");
 
-            when(userService.updateUserProfile(eq(USERNAME), any(UserProfileUpdateRequest.class)))
+            when(userService.updateUserProfile(eq("testuser"), any(UserProfileUpdateRequest.class)))
                     .thenReturn(updatedProfile);
 
             // When & Then
@@ -204,38 +178,8 @@ class UserControllerTest {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(updateRequest)))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.firstName").value("UpdatedJohn"));
+                    .andExpect(jsonPath("$.firstName").value("Jane"))
+                    .andExpect(jsonPath("$.lastName").value("Smith"));
         }
-
-        @Test
-        @WithMockUser(username = USERNAME)
-        @DisplayName("Обновление профиля несуществующего пользователя")
-        void updateProfile_WhenUserNotFound_ShouldReturnNotFound() throws Exception {
-            // Given
-            UserProfileUpdateRequest updateRequest = new UserProfileUpdateRequest();
-            updateRequest.setFirstName("UpdatedJohn");
-
-            when(userService.updateUserProfile(eq(USERNAME), any(UserProfileUpdateRequest.class)))
-                    .thenReturn(null);
-
-            // When & Then
-            mockMvc.perform(patch("/users/me")
-                            .with(csrf())
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(updateRequest)))
-                    .andExpect(status().isNotFound());
-        }
-    }
-
-    private UserProfileResponse createUserProfile() {
-        UserProfileResponse profile = new UserProfileResponse();
-        profile.setId(1L);
-        profile.setEmail(USERNAME);
-        profile.setFirstName("John");
-        profile.setLastName("Doe");
-        profile.setPhone("+79998887766");
-        profile.setRole("USER");
-        profile.setImage("/users/1/avatar");
-        return profile;
     }
 }

@@ -1,5 +1,6 @@
 package ru.skypro.homework.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,7 @@ public class CommentController {
      * @return список комментариев и их количество
      */
     @GetMapping("/{id}/comments")
+    @Operation(summary = "Получение комментариев объявления")
     public ResponseEntity<CommentsDTO> getComments(@PathVariable Long id) {
         CommentsDTO comments = commentService.getCommentsByAdId(id);
         return ResponseEntity.ok(comments);
@@ -44,6 +46,7 @@ public class CommentController {
      * @return созданный комментарий
      */
     @PostMapping("/{id}/comments")
+    @Operation(summary = "Добавление комментария к объявлению")
     public ResponseEntity<CommentDTO> addComment(@PathVariable Long id,
                                                  @Valid @RequestBody CreateOrUpdateCommentDTO dto, Authentication authentication) {
         CommentDTO comment = commentService.addComment(id, dto, authentication.getName());
@@ -59,6 +62,7 @@ public class CommentController {
      * @return статус операции удаления
      */
     @DeleteMapping("/{adId}/comments/{commentId}")
+    @Operation(summary = "Удаление комментария")
     public ResponseEntity<Void> deleteComment(@PathVariable Long adId, @PathVariable Long commentId,
                                               Authentication authentication) {
         boolean deleted = commentService.deleteCommentWithPermission(adId, commentId, authentication.getName());
@@ -75,6 +79,7 @@ public class CommentController {
      * @return обновленный комментарий
      */
     @PatchMapping("/{adId}/comments/{commentId}")
+    @Operation(summary = "Обновление комментария")
     public ResponseEntity<CommentDTO> updateComment(@PathVariable Long adId, @PathVariable Long commentId,
                                                     @Valid @RequestBody CreateOrUpdateCommentDTO dto, Authentication authentication) {
         CommentDTO updatedComment = commentService.updateCommentWithPermission(adId, commentId, dto, authentication.getName());
